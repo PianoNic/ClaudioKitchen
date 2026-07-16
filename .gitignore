@@ -1,0 +1,39 @@
+# --- Secrets / environment ---
+# NEVER commit real credentials. Only .env.example (with placeholders) is tracked.
+.env
+.env.*
+!.env.example
+
+# --- Generated media (served at /files, can grow to hundreds of MB) ---
+data/generated/*
+!data/generated/.gitkeep
+# server.py's non-Docker default FILES_DIR when run outside a container
+/generated/
+# Cost ledger written at runtime
+usage.jsonl
+data/usage.jsonl
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+build/
+dist/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# --- Virtual environments ---
+.venv/
+venv/
+env/
+ENV/
+
+# --- OS / editor cruft ---
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp

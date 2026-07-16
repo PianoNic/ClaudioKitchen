@@ -1,0 +1,12 @@
+services:
+  openrouter-mcp:
+    build: .
+    env_file: .env
+    ports:
+      # Published on all host interfaces. If your reverse proxy (Traefik/Caddy/
+      # Pangolin) runs on THIS host, bind to loopback so nothing reaches the app
+      # except through TLS:  "127.0.0.1:3417:8000"
+      - "3417:8000"
+    volumes:
+      - ./data:/data
+    restart: unless-stopped
