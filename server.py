@@ -24,6 +24,7 @@ from pathlib import Path
 
 import httpx
 from fastmcp import FastMCP, Context
+from fastmcp.apps import AppConfig, ResourceCSP
 from fastmcp.server.auth.oidc_proxy import OIDCProxy
 from fastmcp.server.dependencies import get_access_token
 from fastmcp.utilities.types import Image
@@ -638,8 +639,65 @@ async def upload_file(data: str, filename: str | None = None,
     return {"url": _save_file(raw, ext)}
 
 
+# ----------------- Image UI (MCP Apps) -----------------
+# claude.ai does not render an MCP tool's image content inline in the reply (it only
+# shows in the collapsed tool call). MCP Apps fixes this: a tool can point at a ui://
+# resource that the host renders in a sandboxed iframe, and the tool's image content is
+# delivered to it via postMessage. This is additive - clients without MCP Apps support
+# just ignore the `app` metadata and still get the image block + download link.
+IMAGE_VIEW_URI = "ui://claudiokitchen/image.html"
+
+_IMAGE_VIEW_HTML = """<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<style>
+  :root { color-scheme: light dark; }
+  html, body { margin: 0; background: transparent; }
+  #wrap { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center;
+          align-items: flex-start; padding: 8px; box-sizing: border-box; }
+  img { max-width: 100%; max-height: 70vh; border-radius: 12px;
+        box-shadow: 0 4px 16px rgba(0,0,0,.25); display: block; }
+  #msg { font: 14px system-ui, sans-serif; opacity: .6; padding: 24px; text-align: center; }
+</style>
+</head>
+<body>
+  <div id="wrap"></div>
+  <div id="msg">Rendering image…</div>
+  <script type="module">
+    import { App } from "https://unpkg.com/@modelcontextprotocol/ext-apps@0.4.0/app-with-deps";
+    const wrap = document.getElementById("wrap");
+    const msg = document.getElementById("msg");
+    const render = (content) => {
+      const imgs = (content || []).filter(c => c && c.type === "image" && c.data);
+      if (!imgs.length) { msg.textContent = "No image in this result."; return; }
+      msg.style.display = "none";
+      wrap.replaceChildren(...imgs.map(b => {
+        const el = document.createElement("img");
+        el.src = `data:${b.mimeType || "image/png"};base64,${b.data}`;
+        el.alt = "Generated image";
+        return el;
+      }));
+    };
+    const app = new App({ name: "ClaudioKitchen Image", version: "1.0.0" });
+    app.ontoolresult = ({ content }) => render(content);
+    await app.connect();
+  </script>
+</body>
+</html>"""
+
+
+@mcp.resource(IMAGE_VIEW_URI,
+              app=AppConfig(csp=ResourceCSP(resource_domains=["https://unpkg.com"])))
+def image_view() -> str:
+    """MCP Apps view: renders image content from generate_image / edit_image inline."""
+    return _IMAGE_VIEW_HTML
+
+
 # ----------------- Image -----------------
-@mcp.tool
+@mcp.tool(app=AppConfig(resource_uri=IMAGE_VIEW_URI))
 async def generate_image(prompt: str,
                          model: str = DEFAULT_IMAGE_MODEL,
                          text_and_image: bool = True,
@@ -671,7 +729,7 @@ async def generate_image(prompt: str,
     return _images_from_message(msg) + [_cost_note(j.get("usage"))]
 
 
-@mcp.tool
+@mcp.tool(app=AppConfig(resource_uri=IMAGE_VIEW_URI))
 async def edit_image(prompt: str,
                      image_urls: list[str],
                      model: str = DEFAULT_IMAGE_MODEL):

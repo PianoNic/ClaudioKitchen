@@ -50,6 +50,8 @@ Every `model` param accepts **any** OpenRouter model id. Discover them with `lis
 
 **Per-request cost:** every generating tool reports what the request cost in USD. `generate_image` and `edit_image` append a `💲 Request cost` line; the rest return a `cost_usd` field. (OpenRouter credits are USD.)
 
+**Inline image display:** `generate_image` and `edit_image` also ship an [MCP Apps](https://blog.modelcontextprotocol.io/posts/2026-01-26-mcp-apps/) UI resource (`ui://claudiokitchen/image.html`). On hosts that support MCP Apps (claude.ai), the result renders **inline in the chat** instead of only as a download link. This works around a claude.ai limitation where a tool's image content is otherwise shown only inside the collapsed tool call. Hosts without MCP Apps support ignore it and fall back to the image block plus the download link, so nothing is lost.
+
 **Video runs in two modes:**
 - `generate_video(..., wait=False)` *(default)*: submits the job and returns a job id. Poll it later with `check_video`.
 - `generate_video(..., wait=True, wait_timeout=600)`: polls internally until the clip is done, emitting progress notifications, then returns the finished result with the downloaded video URL. Good for short clips. If it exceeds `wait_timeout` it returns the job id so you can continue with `check_video`.
