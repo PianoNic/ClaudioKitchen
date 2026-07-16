@@ -1,6 +1,10 @@
 services:
   openrouter-mcp:
-    build: .
+    # Pull the image published by the GitHub Actions workflow. Make the GHCR
+    # package public, or run `docker login ghcr.io`, so the pull succeeds.
+    image: ghcr.io/pianonic/claudiokitchen:latest
+    # To build from source instead, comment out `image:` above and use:
+    # build: .
     env_file: .env
     ports:
       # Published on all host interfaces. If your reverse proxy (Traefik/Caddy/
