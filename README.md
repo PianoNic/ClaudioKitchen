@@ -46,7 +46,7 @@ Tags published: `latest` (default branch), the short commit SHA, and semver tags
 | `list_files` / `delete_file` / `cleanup_files` | manage files under `FILES_DIR` (list, delete one, bulk-prune by age or keep-newest) |
 | `usage_summary` | today / this-month / all-time spend (USD) with a per-tool breakdown |
 
-Every `model` param accepts **any** OpenRouter model id. Discover them with `list_models` / `list_video_models`. Defaults are overridable via env (`DEFAULT_IMAGE_MODEL`, `DEFAULT_TTS_MODEL`, `DEFAULT_STT_MODEL`). For **image-only** models (Flux, Sourceful, Recraft, etc.) set `text_and_image=False` on `generate_image`.
+Every `model` param accepts **any** OpenRouter model id. Discover them with `list_models` / `list_video_models`. Defaults are overridable via env (`DEFAULT_IMAGE_MODEL`, `DEFAULT_TTS_MODEL`, `DEFAULT_STT_MODEL`). Image-only models (Flux, Sourceful, Recraft, etc.) are handled automatically — if a model rejects the `text` modality, `generate_image` retries image-only. That includes Recraft's **vector** models (e.g. `recraft/recraft-v4.1-pro-vector`), which return a real **SVG** saved as `.svg`.
 
 **Per-request cost:** every generating tool reports what the request cost in USD. `generate_image` and `edit_image` append a `💲 Request cost` line; the rest return a `cost_usd` field. (OpenRouter credits are USD.)
 
