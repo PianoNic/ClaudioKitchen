@@ -21,7 +21,7 @@ Host's remote MCP connectors require OAuth with **Dynamic Client Registration (D
 |---|---|
 | `list_models` | `GET /models?output_modalities=...` |
 | `list_video_models` | `GET /videos/models` |
-| `upload_image` | stores base64 / data-URL / re-hosted URL → returns a usable URL |
+| `upload_file` / `create_upload_url` | store **any** file (base64 / data-URL / re-hosted URL, or a PUT link) → returns a usable download URL |
 | `generate_image` | `POST /chat/completions` with `modalities` |
 | `edit_image` | `POST /chat/completions` (input image(s) + instruction) |
 | `describe_image` | `POST /chat/completions` (vision) |
@@ -45,18 +45,18 @@ All `model` params accept **any** OpenRouter model id — discover them with `li
 
 Generated images/audio/video are saved to `FILES_DIR` and served at `/files/<uuid>.<ext>?token=<FILES_TOKEN>`. Completed videos are pulled from OpenRouter's `unsigned_urls` onto this server (their URLs expire).
 
-## Uploading your own images (e.g. to edit a photo)
-Three ways, pick what fits:
+## Uploading your own files (images, PDFs, audio, …)
+Any file type works — the extension is taken from the filename you provide, else sniffed from the bytes / content-type (falls back to `.bin`). Downloads are always served as attachments with `nosniff`. Three ways, pick what fits:
 
 **A) Host with a sandbox (recommended, no base64):** Host calls `create_upload_url` to mint a short-lived ticket, then PUTs the raw file bytes directly:
 ```
-curl -T /path/to/photo.png "<upload_url>"
+curl -T /path/to/report.pdf "<upload_url>&name=report.pdf"
 ```
-The PUT returns `{"url": "https://.../files/<id>.jpg?token=..."}` — Host passes that `url` to `edit_image` / `describe_image` / `generate_video`. Tickets are time-limited (`expires_in`, default 900 s) and use-limited (`max_uses`, default 5).
+The PUT returns `{"url": "https://.../files/<id>.pdf?token=..."}` — Host passes that `url` to the user or to `edit_image` / `describe_image` / `transcribe_audio` / `generate_video`. Add `&name=<filename>` to keep the right extension. Tickets are time-limited (`expires_in`, default 900 s) and use-limited (`max_uses`, default 5).
 
-**B) Browser uploader (for a pasted chat image):** open **`<BASE_URL>/upload?token=<FILES_TOKEN>`**, drag-drop, copy the returned URL into chat.
+**B) Browser uploader (for a file pasted/attached in chat):** open **`<BASE_URL>/upload?token=<FILES_TOKEN>`**, drag-drop any file, copy the returned URL into chat.
 
-**C) `upload_image` tool:** for images Host already has as base64 / `data:` / http URL. Tolerant base64 decoding + image-type auto-detection (JPEG/PNG/GIF/WEBP/BMP).
+**C) `upload_file` tool:** for a file Host already has as base64 / `data:` / http URL. Pass `filename` to preserve the extension; tolerant base64 decoding + type auto-detection (images, PDF, MP4, WAV, MP3, OGG, FLAC, ZIP, …).
 
 ## Cost tracking & budget
 Every generating tool records its per-request USD cost to an append-only ledger (`usage.jsonl`, next to `FILES_DIR` on the volume; relocate with `USAGE_LOG`). Ask for **`usage_summary`** to see today / this-month / all-time spend with a per-tool breakdown. Set **`MONTHLY_BUDGET_USD`** to a hard cap — once this calendar month's recorded spend reaches it, generating tools refuse to run until next month. Video jobs are recorded once (deduped by job id) even if you poll `check_video` repeatedly.
@@ -69,7 +69,7 @@ The `/files/` route requires `?token=<FILES_TOKEN>`. Set `FILES_TOKEN` in `.env`
 
 Hardening applied in this server:
 - Downloads are served with `X-Content-Type-Options: nosniff` and `Content-Disposition: attachment`, so a stored `.svg`/`.html` can't execute script in the server's origin.
-- Outbound fetches (`upload_image` from a URL, `edit_image`, `describe_image`, `transcribe_audio`) are restricted to public **http(s)** hosts — loopback, link-local (incl. `169.254.169.254`), and private ranges are blocked (SSRF guard) — with redirects disabled and a size cap (`FETCH_MAX_BYTES`, default 100 MB). Uploads are capped by `UPLOAD_MAX_BYTES`.
+- Outbound fetches (`upload_file` from a URL, `edit_image`, `describe_image`, `transcribe_audio`) are restricted to public **http(s)** hosts — loopback, link-local (incl. `169.254.169.254`), and private ranges are blocked (SSRF guard) — with redirects disabled and a size cap (`FETCH_MAX_BYTES`, default 100 MB). Uploads are capped by `UPLOAD_MAX_BYTES`.
 
 > Known limitation: `FILES_TOKEN` is a single global secret carried in the URL query string. Don't pass `/files` URLs to third-party APIs, and configure your reverse proxy to strip query strings from access logs. Rotating it invalidates all existing download links.
 
