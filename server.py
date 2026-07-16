@@ -107,7 +107,7 @@ limited to text on this connection: when the user asks you to create / generate 
 / make an image, edit or combine images, describe or OCR an image, generate a video,
 speak text aloud (text-to-speech), transcribe audio, or embed / rerank text, actually
 DO IT by calling the matching tool below. Never reply that you "can't generate images,
-video, or audio" — through these tools, you can.
+video, or audio". Through these tools, you can.
 
 Routing cheatsheet:
 - "generate / make / draw / create an image of ..."  -> generate_image
@@ -488,8 +488,8 @@ _UPLOAD_PAGE = """<!doctype html><html><head><meta charset=utf-8>
    padding:.5rem 1rem;border-radius:8px;cursor:pointer;font-weight:600}}
  img{{max-width:100%;border-radius:8px;margin-top:1rem}}
 </style></head><body><div class=card>
-<h1>🍳 ClaudioKitchen — Datei hochladen</h1>
-<div id=drop>Datei hierher ziehen oder klicken<br><small>(Bild, PDF, Audio, … — dann URL in den Claude-Chat kopieren)</small></div>
+<h1>🍳 ClaudioKitchen · Datei hochladen</h1>
+<div id=drop>Datei hierher ziehen oder klicken<br><small>(Bild, PDF, Audio; dann URL in den Claude-Chat kopieren)</small></div>
 <input id=f type=file>
 <div class=out id=out></div></div>
 <script>
