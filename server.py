@@ -601,17 +601,23 @@ async def create_upload_url(expires_in: int = 900, max_uses: int = 5) -> dict:
 @mcp.tool
 async def upload_file(data: str, filename: str | None = None,
                       content_type: str | None = None) -> dict:
-    """Store ANY file on this server (image, PDF, audio, video, text, doc, ...) and
-    return a token-protected download URL usable by the other tools and shareable back
-    to the user. `data` may be raw base64, a full `data:<mime>;base64,...` URL, or an
-    http(s) URL to re-host. Pass `filename` (e.g. 'report.pdf') to preserve the right
-    extension; otherwise the type is sniffed from the bytes / `content_type`. base64 is
-    decoded tolerantly (whitespace and missing padding are handled).
+    """Store ANY file on this server (image, PDF, audio, video, text, doc, and more)
+    and return a token-protected download URL, usable by the other tools and shareable
+    back to the user.
 
-    Note: pass the file BYTES as base64, not a local sandbox path (e.g. /mnt/...) -
-    that path doesn't exist on this server. For a large local file, prefer
-    create_upload_url and PUT the raw bytes. To upload a file pasted into the chat via
-    a browser, open `<BASE_URL>/upload?token=<FILES_TOKEN>`."""
+    `data` accepts, in order of preference:
+      1. an http(s) URL to re-host (cheap: the server downloads it for you).
+      2. a `data:<mime>;base64,...` URL.
+      3. raw base64 of the file bytes.
+    Forms 2 and 3 mean emitting the whole file as text, so they only make sense for
+    small or self-generated content (you cannot base64 a file you merely 'see'). For a
+    local file you already have, prefer create_upload_url and PUT the raw bytes (no
+    base64, no size blowup). For a file the user has on their machine, send them to the
+    browser uploader at `<BASE_URL>/upload?token=<FILES_TOKEN>`. A local sandbox path
+    like /mnt/... is NOT valid here; it does not exist on this server.
+
+    Pass `filename` (e.g. 'report.pdf') to preserve the extension; otherwise the type
+    is sniffed from the bytes / `content_type`. base64 is decoded tolerantly."""
     await _check_user()
     ctype = content_type or ""
     if data.startswith(("http://", "https://")):

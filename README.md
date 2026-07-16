@@ -15,13 +15,26 @@ Claude's remote MCP connectors require OAuth with **Dynamic Client Registration 
 3. `docker compose up -d --build`
 4. In claude.ai: **Settings → Connectors → Add custom connector**, URL: `https://<your-mcp-domain>/mcp`. Claude redirects you to Pocket ID, you log in, and you're done.
 
+## Docker image
+
+A GitHub Actions workflow (`.github/workflows/docker-publish.yml`) builds and pushes an image to the GitHub Container Registry on every push to `main` and on `v*` tags. To run the prebuilt image instead of building locally, point `compose.yml` at it:
+
+```yaml
+services:
+  openrouter-mcp:
+    image: ghcr.io/pianonic/claudiokitchen:latest
+    # drop the `build: .` line
+```
+
+Tags published: `latest` (default branch), the short commit SHA, and semver tags like `1.2` / `1.2.3` when you push a `v1.2.3` tag. The package is private until you set it public in the repo's package settings.
+
 ## Tools
 
 | Tool | OpenRouter endpoint |
 |---|---|
 | `list_models` | `GET /models?output_modalities=...` |
 | `list_video_models` | `GET /videos/models` |
-| `upload_file` / `create_upload_url` | store **any** file (base64, data-URL, re-hosted URL, or a PUT link), returns a download URL |
+| `upload_file` / `create_upload_url` | store **any** file, returns a download URL. Preferred: PUT raw bytes via `create_upload_url`, the browser uploader, or re-host an http URL. base64 is a fallback for small data. |
 | `generate_image` | `POST /chat/completions` with `modalities` |
 | `edit_image` | `POST /chat/completions` (input image(s) + instruction) |
 | `describe_image` | `POST /chat/completions` (vision) |
