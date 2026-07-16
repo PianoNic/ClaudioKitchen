@@ -656,7 +656,7 @@ _IMAGE_VIEW_HTML = """<!DOCTYPE html>
 <style>
   :root { color-scheme: light dark; }
   html, body { margin: 0; background: transparent; }
-  #wrap { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center;
+  #wrap { display: flex; flex-wrap: wrap; gap: 12px; justify-content: flex-start;
           align-items: flex-start; padding: 8px; box-sizing: border-box; }
   /* Absolute caps, not % / vh: the iframe starts tiny, so relative units collapse
      the image. autoResize then grows the frame to fit this size. */
