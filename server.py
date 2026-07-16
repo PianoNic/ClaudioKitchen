@@ -443,14 +443,16 @@ def _images_from_message(msg: dict) -> list:
             raw = _decode_b64(url)
             mime = header[5:].split(";")[0].strip().lower()  # data:<mime>;base64
             if mime == "image/svg+xml" or raw.lstrip()[:4] == b"<svg" or raw[:5] == b"<?xml":
-                mime, ext = "image/svg+xml", "svg"
+                # claude.ai rejects SVG inside an image content block, so emit only the
+                # download link; the MCP Apps view loads the SVG from that URL.
+                out.append(f"Download: {_save_file(raw, 'svg')}")
             else:
                 ext = _sniff_image_ext(raw, fallback=(mime.split("/")[-1] if mime else "png"))
                 mime = f"image/{'jpeg' if ext == 'jpg' else ext}"
-            out.append(ImageContent(type="image",
-                                    data=base64.b64encode(raw).decode(),
-                                    mimeType=mime))
-            out.append(f"Download: {_save_file(raw, ext)}")
+                out.append(ImageContent(type="image",
+                                        data=base64.b64encode(raw).decode(),
+                                        mimeType=mime))
+                out.append(f"Download: {_save_file(raw, ext)}")
         elif url.startswith(("http://", "https://")):
             # Some providers return a hosted URL rather than inline bytes.
             out.append(f"Image URL: {url}")
@@ -660,7 +662,7 @@ async def upload_file(data: str, filename: str | None = None,
 # just ignore the `app` metadata and still get the image block + download link.
 IMAGE_VIEW_URI = "ui://claudiokitchen/image.html"
 
-_IMAGE_VIEW_HTML = """<!DOCTYPE html>
+_IMAGE_VIEW_HTML = r"""<!DOCTYPE html>
 <html>
 <head>
 <meta charset="utf-8">
@@ -685,16 +687,26 @@ _IMAGE_VIEW_HTML = """<!DOCTYPE html>
     import { App } from "https://unpkg.com/@modelcontextprotocol/ext-apps@0.4.0/app-with-deps";
     const wrap = document.getElementById("wrap");
     const msg = document.getElementById("msg");
+    const show = (nodes) => { msg.style.display = "none"; wrap.replaceChildren(...nodes); };
+    const imgEl = (src, alt) => {
+      const el = document.createElement("img"); el.src = src; el.alt = alt || "image";
+      el.onerror = () => { msg.style.display = ""; msg.textContent = "Preview unavailable — use the download link."; };
+      return el;
+    };
     const render = (content) => {
-      const imgs = (content || []).filter(c => c && c.type === "image" && c.data);
-      if (!imgs.length) { msg.textContent = "No image in this result."; return; }
-      msg.style.display = "none";
-      wrap.replaceChildren(...imgs.map(b => {
-        const el = document.createElement("img");
-        el.src = `data:${b.mimeType || "image/png"};base64,${b.data}`;
-        el.alt = "Generated image";
-        return el;
-      }));
+      const blocks = content || [];
+      // Raster images arrive as image content blocks (base64 data URI).
+      const imgs = blocks.filter(c => c && c.type === "image" && c.data);
+      if (imgs.length) {
+        show(imgs.map(b => imgEl(`data:${b.mimeType || "image/png"};base64,${b.data}`, "Generated image")));
+        return;
+      }
+      // Vector output (SVG): claude.ai rejects SVG image blocks, so the server sends only
+      // a download link. Load the SVG from that URL (CSP allows the files origin).
+      const text = blocks.filter(c => c && c.type === "text").map(c => c.text || "").join("\n");
+      const m = text.match(/https?:\/\/[^\s"']+\.svg[^\s"']*/i);
+      if (m) { show([imgEl(m[0], "Generated vector image")]); return; }
+      msg.textContent = "No image in this result.";
     };
     // autoResize (default on) makes the app report its size so the host grows the
     // iframe to fit the image instead of leaving it at the tiny default frame.
@@ -706,8 +718,15 @@ _IMAGE_VIEW_HTML = """<!DOCTYPE html>
 </html>"""
 
 
+# Origin of this server's file store, so the sandboxed view may load an SVG from a
+# /files download URL (an SVG can't ride inside an image content block).
+_BU = httpx.URL(BASE_URL)
+BASE_ORIGIN = f"{_BU.scheme}://{_BU.netloc.decode()}"
+
+
 @mcp.resource(IMAGE_VIEW_URI,
-              app=AppConfig(csp=ResourceCSP(resource_domains=["https://unpkg.com"])))
+              app=AppConfig(csp=ResourceCSP(
+                  resource_domains=["https://unpkg.com", BASE_ORIGIN])))
 def image_view() -> str:
     """MCP Apps view: renders image content from generate_image / edit_image inline."""
     return _IMAGE_VIEW_HTML
