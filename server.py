@@ -27,7 +27,7 @@ from fastmcp import FastMCP, Context
 from fastmcp.apps import AppConfig, ResourceCSP
 from fastmcp.server.auth.oidc_proxy import OIDCProxy
 from fastmcp.server.dependencies import get_access_token
-from fastmcp.utilities.types import Image
+from mcp.types import ImageContent
 from starlette.requests import Request
 from starlette.responses import FileResponse, JSONResponse, HTMLResponse
 
@@ -426,7 +426,12 @@ async def _check_budget() -> None:
 
 
 def _images_from_message(msg: dict) -> list:
-    """Convert chat-completions image outputs to MCP Image blocks + download URLs."""
+    """Convert chat-completions image outputs to MCP image blocks + download URLs.
+
+    Handles both raster output (PNG/JPG/... from Gemini, Flux, ...) and vector output
+    (image/svg+xml from Recraft's vector models), saving each with the right extension
+    and the correct MIME so it renders inline.
+    """
     images = msg.get("images") or []
     if not images:
         return [f"No image returned. Model said: {msg.get('content')}"]
@@ -434,9 +439,17 @@ def _images_from_message(msg: dict) -> list:
     for img in images:
         url = ((img or {}).get("image_url") or {}).get("url", "")
         if url.startswith("data:") and "," in url:
+            header, _ = url.split(",", 1)
             raw = _decode_b64(url)
-            ext = _sniff_image_ext(raw, fallback="png")
-            out.append(Image(data=raw, format=ext))
+            mime = header[5:].split(";")[0].strip().lower()  # data:<mime>;base64
+            if mime == "image/svg+xml" or raw.lstrip()[:4] == b"<svg" or raw[:5] == b"<?xml":
+                mime, ext = "image/svg+xml", "svg"
+            else:
+                ext = _sniff_image_ext(raw, fallback=(mime.split("/")[-1] if mime else "png"))
+                mime = f"image/{'jpeg' if ext == 'jpg' else ext}"
+            out.append(ImageContent(type="image",
+                                    data=base64.b64encode(raw).decode(),
+                                    mimeType=mime))
             out.append(f"Download: {_save_file(raw, ext)}")
         elif url.startswith(("http://", "https://")):
             # Some providers return a hosted URL rather than inline bytes.
@@ -711,7 +724,9 @@ async def generate_image(prompt: str,
     instead of declining. `model` accepts ANY OpenRouter image
     model id (e.g. 'google/gemini-2.5-flash-image', 'black-forest-labs/flux-1.1-pro',
     'openai/gpt-image-1', ...) - discover them with list_models(output_modality='image').
-    Set text_and_image=False for image-only models (e.g. Flux). Optional aspect_ratio
+    Image-only models (Flux, and Recraft's vector models like
+    'recraft/recraft-v4.1-pro-vector', which return a real SVG) are handled
+    automatically, so text_and_image can be left at its default. Optional aspect_ratio
     like '16:9'. Returns the image inline plus a download URL."""
     await _check_user()
     await _check_budget()
@@ -726,6 +741,13 @@ async def generate_image(prompt: str,
 
     async with httpx.AsyncClient(timeout=300) as c:
         r = await c.post(f"{OR_BASE}/chat/completions", headers=OR_HEADERS, json=body)
+        # Image-only models (Recraft vector, Flux, ...) reject modalities ["image","text"]
+        # with a 404 ("No endpoints found that support the requested output modalities").
+        # Retry image-only so the caller doesn't have to know to set text_and_image=False.
+        if (r.status_code == 404 and body.get("modalities") == ["image", "text"]
+                and "output modalities" in r.text.lower()):
+            body["modalities"] = ["image"]
+            r = await c.post(f"{OR_BASE}/chat/completions", headers=OR_HEADERS, json=body)
         r.raise_for_status()
         j = r.json()
         msg = j["choices"][0]["message"]
@@ -752,12 +774,16 @@ async def edit_image(prompt: str,
             content.append({"type": "image_url",
                             "image_url": {"url": f"data:{mime};base64,{b64}"}})
 
-        r = await c.post(f"{OR_BASE}/chat/completions", headers=OR_HEADERS, json={
+        ebody = {
             "model": model,
             "messages": [{"role": "user", "content": content}],
             "modalities": ["image", "text"],
             "usage": USAGE,
-        })
+        }
+        r = await c.post(f"{OR_BASE}/chat/completions", headers=OR_HEADERS, json=ebody)
+        if r.status_code == 404 and "output modalities" in r.text.lower():
+            ebody["modalities"] = ["image"]
+            r = await c.post(f"{OR_BASE}/chat/completions", headers=OR_HEADERS, json=ebody)
         r.raise_for_status()
         j = r.json()
         msg = j["choices"][0]["message"]
