@@ -18,6 +18,7 @@ import socket
 import secrets
 import asyncio
 import ipaddress
+import mimetypes
 import datetime as dt
 from pathlib import Path
 
@@ -98,7 +99,34 @@ auth = OIDCProxy(
     extra_authorize_params={"scope": "openid email profile"},
 )
 
-mcp = FastMCP("ClaudioKitchen", auth=auth)
+# Sent to the client on initialize (MCP `instructions`). Clients like Claude may fold
+# this into the system prompt, so it's where we tell Claude it CAN generate media here.
+SERVER_INSTRUCTIONS = """\
+ClaudioKitchen gives you real multimodal generation through OpenRouter. You are NOT
+limited to text on this connection: when the user asks you to create / generate / draw
+/ make an image, edit or combine images, describe or OCR an image, generate a video,
+speak text aloud (text-to-speech), transcribe audio, or embed / rerank text, actually
+DO IT by calling the matching tool below. Never reply that you "can't generate images,
+video, or audio" — through these tools, you can.
+
+Routing cheatsheet:
+- "generate / make / draw / create an image of ..."  -> generate_image
+- "edit / change / combine / restyle this image"     -> edit_image (give it image URL[s])
+- "what's in this image / read the text in it"       -> describe_image
+- "make / generate a video of ..."                   -> generate_video (spends credits)
+- "read this aloud / say ... / voice this"           -> text_to_speech
+- "transcribe / what is said in this audio"          -> transcribe_audio
+- "embed these texts" / "rerank these by relevance"  -> create_embeddings / rerank
+
+Each generating tool returns a download URL and reports its USD cost. If unsure which
+model to use, call list_models / list_video_models first; otherwise the defaults are
+fine. To put a file (image, PDF, audio, ...) on this server, use upload_file, or mint a
+browser/PUT link with create_upload_url; the returned URL feeds edit_image /
+describe_image / transcribe_audio / generate_video. Use list_files / usage_summary to
+manage stored files and track spend.
+"""
+
+mcp = FastMCP("ClaudioKitchen", instructions=SERVER_INSTRUCTIONS, auth=auth)
 
 # Caches to avoid repeated network calls
 _email_cache: dict[str, str] = {}        # sub -> email
@@ -189,6 +217,63 @@ def _sniff_image_ext(raw: bytes, fallback: str = "png") -> str:
     return "".join(ch for ch in fallback if ch.isalnum())[:5].lower() or "png"
 
 
+def _clean_ext(name: str) -> str:
+    """Sanitize an extension taken from a filename (alphanumeric, <=8 chars)."""
+    ext = name.rsplit(".", 1)[-1] if "." in name else ""
+    return "".join(ch for ch in ext if ch.isalnum()).lower()[:8]
+
+
+def _sniff_ext(raw: bytes, name: str = "", content_type: str = "") -> str:
+    """Pick a file extension for ANY uploaded file (not just images).
+
+    Order: the caller's filename extension (preserves .pdf/.csv/.json/.docx/...),
+    then magic-byte detection, then the content-type, else 'bin'. Downloads are
+    always served as attachments with nosniff, so a preserved extension is safe.
+    """
+    ext = _clean_ext(name)
+    if ext:
+        return ext
+    # magic-byte detection for common formats
+    if raw[:3] == b"\xff\xd8\xff":
+        return "jpg"
+    if raw[:8] == b"\x89PNG\r\n\x1a\n":
+        return "png"
+    if raw[:6] in (b"GIF87a", b"GIF89a"):
+        return "gif"
+    if raw[:4] == b"RIFF" and raw[8:12] == b"WEBP":
+        return "webp"
+    if raw[:4] == b"RIFF" and raw[8:12] == b"WAVE":
+        return "wav"
+    if raw[:2] == b"BM":
+        return "bmp"
+    if raw[:4] == b"%PDF":
+        return "pdf"
+    if raw[4:8] == b"ftyp":
+        return "mp4"
+    if raw[:3] == b"ID3" or raw[:2] in (b"\xff\xfb", b"\xff\xf3", b"\xff\xf2"):
+        return "mp3"
+    if raw[:4] == b"OggS":
+        return "ogg"
+    if raw[:4] == b"fLaC":
+        return "flac"
+    if raw[:4] == b"PK\x03\x04":
+        return "zip"
+    if raw[:2] == b"\x1f\x8b":
+        return "gz"
+    if content_type:
+        ct = content_type.split(";")[0].strip().lower()
+        # a few common types mimetypes can miss depending on the OS registry
+        extra = {"image/webp": "webp", "image/svg+xml": "svg", "audio/mpeg": "mp3",
+                 "audio/wav": "wav", "audio/x-wav": "wav", "audio/ogg": "ogg",
+                 "video/mp4": "mp4", "video/webm": "webm"}
+        if ct in extra:
+            return extra[ct]
+        guessed = mimetypes.guess_extension(ct)
+        if guessed:
+            return guessed.lstrip(".").lower()
+    return "bin"
+
+
 def _decode_b64(data: str) -> bytes:
     """Tolerant base64 decode: strips data: prefixes, whitespace, and fixes padding."""
     if data.startswith("data:") and "," in data:
@@ -229,9 +314,12 @@ async def _safe_fetch(c: httpx.AsyncClient, url: str,
     parsed = httpx.URL(url)
     if parsed.scheme not in ("http", "https"):
         raise ValueError(f"Only http(s) URLs are allowed (got {parsed.scheme!r}).")
-    host = parsed.host
-    if not host or not _host_is_public(host):
-        raise ValueError(f"Refusing to fetch non-public or unresolvable host: {host!r}")
+    # Files hosted on this server's own /files store are trusted (skip the SSRF host
+    # check so uploaded files work even when BASE_URL is a private/tunnel host).
+    if not url.startswith(BASE_URL.rstrip("/") + "/"):
+        host = parsed.host
+        if not host or not _host_is_public(host):
+            raise ValueError(f"Refusing to fetch non-public or unresolvable host: {host!r}")
     buf = bytearray()
     async with c.stream("GET", url, follow_redirects=False) as r:
         r.raise_for_status()
@@ -400,9 +488,9 @@ _UPLOAD_PAGE = """<!doctype html><html><head><meta charset=utf-8>
    padding:.5rem 1rem;border-radius:8px;cursor:pointer;font-weight:600}}
  img{{max-width:100%;border-radius:8px;margin-top:1rem}}
 </style></head><body><div class=card>
-<h1>🍳 ClaudioKitchen — Bild hochladen</h1>
-<div id=drop>Bild hierher ziehen oder klicken<br><small>(dann URL in den Claude-Chat kopieren)</small></div>
-<input id=f type=file accept="image/*">
+<h1>🍳 ClaudioKitchen — Datei hochladen</h1>
+<div id=drop>Datei hierher ziehen oder klicken<br><small>(Bild, PDF, Audio, … — dann URL in den Claude-Chat kopieren)</small></div>
+<input id=f type=file>
 <div class=out id=out></div></div>
 <script>
  const tok={token};
@@ -412,15 +500,18 @@ _UPLOAD_PAGE = """<!doctype html><html><head><meta charset=utf-8>
  ;['dragleave','drop'].forEach(e=>drop.addEventListener(e,ev=>{{ev.preventDefault();drop.classList.remove('hot')}}));
  drop.addEventListener('drop',ev=>up(ev.dataTransfer.files[0]));
  inp.onchange=()=>up(inp.files[0]);
+ function esc(s){{return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}}
  async function up(file){{
    if(!file)return; out.textContent='Lade hoch…';
    const r=await fetch('/upload?token='+encodeURIComponent(tok)+'&name='+encodeURIComponent(file.name),
      {{method:'PUT',body:file}});
    if(!r.ok){{out.textContent='Fehler: '+r.status;return}}
-   const j=await r.json();
-   out.innerHTML='<b>URL (in den Chat kopieren):</b><br><a href="'+j.url+'" target=_blank>'+j.url+'</a>'+
-     '<br><button onclick="navigator.clipboard.writeText(\\''+j.url+'\\')">Kopieren</button>'+
-     '<br><img src="'+j.url+'">';
+   const j=await r.json(); const u=esc(j.url);
+   let html='<b>URL (in den Chat kopieren):</b><br><a href="'+u+'" target=_blank>'+u+'</a>'+
+     '<br><button id=cp>Kopieren</button>';
+   if((file.type||'').startsWith('image/')) html+='<br><img src="'+u+'">';
+   out.innerHTML=html;
+   document.getElementById('cp').onclick=()=>navigator.clipboard.writeText(j.url);
  }}
 </script></body></html>"""
 
@@ -449,8 +540,7 @@ async def upload_route(request: Request):
     if len(raw) > UPLOAD_MAX_BYTES:
         return JSONResponse({"error": "payload too large"}, status_code=413)
     name = q.get("name", "")
-    fallback = (name.rsplit(".", 1)[-1].lower() if "." in name else "png")
-    ext = _sniff_image_ext(raw, fallback=fallback)
+    ext = _sniff_ext(raw, name=name, content_type=request.headers.get("content-type", ""))
     return JSONResponse({"url": _save_file(raw, ext)})
 
 
@@ -481,17 +571,18 @@ async def list_video_models() -> dict:
         return r.json()
 
 
-# ----------------- Image -----------------
+# ----------------- Uploads -----------------
 @mcp.tool
 async def create_upload_url(expires_in: int = 900, max_uses: int = 5) -> dict:
-    """Mint a short-lived upload URL so you can send a file's RAW BYTES directly to this
-    server instead of base64-encoding it into a tool call. Best for uploading a local
-    file from your sandbox (e.g. a photo the user attached).
+    """Mint a short-lived upload URL so you can send ANY file's RAW BYTES directly to
+    this server instead of base64-encoding it into a tool call. Best for uploading a
+    local file from your sandbox (image, PDF, audio, video, doc, ...).
 
     Returns `upload_url`. Upload with an HTTP PUT of the raw bytes, e.g.:
-        curl -T /path/to/photo.png "<upload_url>"
-    The PUT returns JSON like {"url": "https://.../files/<id>.jpg?token=..."} - pass that
-    `url` to edit_image / describe_image / generate_video(image_url=...)."""
+        curl -T /path/to/file.pdf "<upload_url>&name=file.pdf"
+    Add `&name=<filename>` to preserve the extension. The PUT returns JSON like
+    {"url": "https://.../files/<id>.pdf?token=..."} - pass that `url` to the user or to
+    edit_image / describe_image / transcribe_audio / generate_video(image_url=...)."""
     await _check_user()
     expires_in = max(60, min(int(expires_in), 24 * 3600))  # 1 min .. 24 h
     max_uses = max(1, min(int(max_uses), 100))
@@ -502,44 +593,54 @@ async def create_upload_url(expires_in: int = 900, max_uses: int = 5) -> dict:
         "method": "PUT",
         "expires_in": expires_in,
         "max_uses": max_uses,
-        "curl_example": f'curl -T photo.png "{BASE_URL}/upload?ticket={ticket}"',
-        "next": "PUT the raw image bytes; use the returned `url` with edit_image etc.",
+        "curl_example": f'curl -T file.pdf "{BASE_URL}/upload?ticket={ticket}&name=file.pdf"',
+        "next": "PUT the raw file bytes (add &name=<filename>); use the returned `url`.",
     }
 
 
 @mcp.tool
-async def upload_image(data: str, format: str | None = None) -> dict:
-    """Store an image on this server and return a token-protected URL that the other
-    tools (edit_image, describe_image, generate_video image_url) can use. `data` may be
-    raw base64, a full `data:image/...;base64,...` URL, or an http(s) URL to re-host.
-    The real image type is auto-detected; `format` is only a fallback. base64 input is
+async def upload_file(data: str, filename: str | None = None,
+                      content_type: str | None = None) -> dict:
+    """Store ANY file on this server (image, PDF, audio, video, text, doc, ...) and
+    return a token-protected download URL usable by the other tools and shareable back
+    to the user. `data` may be raw base64, a full `data:<mime>;base64,...` URL, or an
+    http(s) URL to re-host. Pass `filename` (e.g. 'report.pdf') to preserve the right
+    extension; otherwise the type is sniffed from the bytes / `content_type`. base64 is
     decoded tolerantly (whitespace and missing padding are handled).
 
-    Note: pass the image BYTES as base64, not a local file path - a path like
-    /mnt/... lives in your sandbox, not on this server. To upload a photo pasted into
-    the chat without base64, open `<BASE_URL>/upload?token=<FILES_TOKEN>` in a browser."""
+    Note: pass the file BYTES as base64, not a local sandbox path (e.g. /mnt/...) -
+    that path doesn't exist on this server. For a large local file, prefer
+    create_upload_url and PUT the raw bytes. To upload a file pasted into the chat via
+    a browser, open `<BASE_URL>/upload?token=<FILES_TOKEN>`."""
     await _check_user()
+    ctype = content_type or ""
     if data.startswith(("http://", "https://")):
         async with httpx.AsyncClient(timeout=120) as c:
-            raw, _ = await _safe_fetch(c, data, max_bytes=UPLOAD_MAX_BYTES)
+            raw, fetched_ctype = await _safe_fetch(c, data, max_bytes=UPLOAD_MAX_BYTES)
+        ctype = ctype or fetched_ctype
     else:
+        if data.startswith("data:") and ";" in data.split(",", 1)[0]:
+            ctype = ctype or data[5:].split(";", 1)[0]  # mime from the data: URL
         try:
             raw = _decode_b64(data)
         except Exception as e:
             raise ValueError(
-                "data must be base64 image bytes or an http(s)/data URL - not a file "
-                f"path. ({e})"
+                "data must be base64 file bytes or an http(s)/data URL - not a local "
+                f"file path. ({e})"
             )
-    ext = _sniff_image_ext(raw, fallback=format or "png")
+    ext = _sniff_ext(raw, name=filename or "", content_type=ctype)
     return {"url": _save_file(raw, ext)}
 
 
+# ----------------- Image -----------------
 @mcp.tool
 async def generate_image(prompt: str,
                          model: str = DEFAULT_IMAGE_MODEL,
                          text_and_image: bool = True,
                          aspect_ratio: str | None = None):
-    """Generate an image from a text prompt. `model` accepts ANY OpenRouter image
+    """Generate an image from a text prompt. Call this whenever the user asks you to
+    create / draw / make / generate an image - you CAN produce images here, so do it
+    instead of declining. `model` accepts ANY OpenRouter image
     model id (e.g. 'google/gemini-2.5-flash-image', 'black-forest-labs/flux-1.1-pro',
     'openai/gpt-image-1', ...) - discover them with list_models(output_modality='image').
     Set text_and_image=False for image-only models (e.g. Flux). Optional aspect_ratio
