@@ -658,8 +658,10 @@ _IMAGE_VIEW_HTML = """<!DOCTYPE html>
   html, body { margin: 0; background: transparent; }
   #wrap { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center;
           align-items: flex-start; padding: 8px; box-sizing: border-box; }
-  img { max-width: 100%; max-height: 70vh; border-radius: 12px;
-        box-shadow: 0 4px 16px rgba(0,0,0,.25); display: block; }
+  /* Absolute caps, not % / vh: the iframe starts tiny, so relative units collapse
+     the image. autoResize then grows the frame to fit this size. */
+  img { display: block; width: auto; height: auto; max-width: 480px; max-height: 480px;
+        border-radius: 12px; box-shadow: 0 4px 16px rgba(0,0,0,.25); }
   #msg { font: 14px system-ui, sans-serif; opacity: .6; padding: 24px; text-align: center; }
 </style>
 </head>
@@ -681,7 +683,9 @@ _IMAGE_VIEW_HTML = """<!DOCTYPE html>
         return el;
       }));
     };
-    const app = new App({ name: "ClaudioKitchen Image", version: "1.0.0" });
+    // autoResize (default on) makes the app report its size so the host grows the
+    // iframe to fit the image instead of leaving it at the tiny default frame.
+    const app = new App({ name: "ClaudioKitchen Image", version: "1.0.0" }, {}, { autoResize: true });
     app.ontoolresult = ({ content }) => render(content);
     await app.connect();
   </script>
