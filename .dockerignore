@@ -1,0 +1,19 @@
+# Keep the build context tiny and never bake secrets/data into an image.
+.env
+.env.*
+!.env.example
+data/
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.git/
+.gitignore
+.dockerignore
+README.md
+LICENSE
+*.md
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
