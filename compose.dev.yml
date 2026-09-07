@@ -1,0 +1,9 @@
+services:
+  openrouter-mcp:
+    build: .
+    env_file: .env
+    ports:
+      - "3417:8000"
+    volumes:
+      - ./data:/data
+    restart: unless-stopped
