@@ -1,7 +1,7 @@
 # Keep the build context tiny and never bake secrets/data into an image.
 .env
 .env.*
-!.env.example
+!template.env
 data/
 __pycache__/
 *.py[cod]
@@ -13,6 +13,9 @@ venv/
 README.md
 LICENSE
 *.md
+docs/
+assets/
+tests/
 .idea/
 .vscode/
 .DS_Store
