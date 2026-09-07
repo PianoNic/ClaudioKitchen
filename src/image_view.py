@@ -43,7 +43,7 @@ _IMAGE_VIEW_HTML = r"""<!DOCTYPE html>
     const show = (nodes) => { msg.style.display = "none"; wrap.replaceChildren(...nodes); };
     const imgEl = (src, alt) => {
       const el = document.createElement("img"); el.src = src; el.alt = alt || "image";
-      el.onerror = () => { msg.style.display = ""; msg.textContent = "Preview unavailable — use the download link."; };
+      el.onerror = () => { msg.style.display = ""; msg.textContent = "Preview unavailable. Use the download link."; };
       return el;
     };
     const render = (content) => {

@@ -22,7 +22,7 @@ Every `model` param accepts **any** OpenRouter model id. Discover them with
 `list_models` / `list_video_models`. Defaults are overridable via env
 (`DEFAULT_IMAGE_MODEL`, `DEFAULT_TTS_MODEL`, `DEFAULT_STT_MODEL`, see
 [configuration](configuration.md)). Image-only models (Flux, Sourceful, Recraft, etc.)
-are handled automatically — if a model rejects the `text` modality, `generate_image`
+are handled automatically: if a model rejects the `text` modality, `generate_image`
 retries image-only. That includes Recraft's **vector** models (e.g.
 `recraft/recraft-v4.1-pro-vector`), which return a real **SVG** saved as `.svg`.
 
@@ -36,7 +36,7 @@ retries image-only. That includes Recraft's **vector** models (e.g.
 [MCP Apps](https://blog.modelcontextprotocol.io/posts/2026-01-26-mcp-apps/) UI resource
 (`ui://claudiokitchen/image.html`, see `src/image_view.py`). On hosts that support MCP
 Apps (claude.ai), the result renders **inline in the chat** instead of only as a
-download link — this works around a claude.ai limitation where a tool's image content
+download link. This works around a claude.ai limitation where a tool's image content
 is otherwise shown only inside the collapsed tool call. Hosts without MCP Apps support
 ignore it and fall back to the image block plus the download link, so nothing is lost.
 

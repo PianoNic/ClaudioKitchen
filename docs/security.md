@@ -22,8 +22,8 @@ without ever holding `FILES_TOKEN`. Tickets are time-limited (`expires_in`, defa
 
 Downloads are served with `X-Content-Type-Options: nosniff` and
 `Content-Disposition: attachment` (`src/routes.py`), so a stored `.svg` or `.html`
-can't execute script in the server's origin — the origin that also carries the OIDC
-session.
+can't execute script in the server's origin (the origin that also carries the OIDC
+session).
 
 ## Outbound fetch guard (SSRF)
 
@@ -32,7 +32,7 @@ Outbound fetches (`upload_file` from a URL, `edit_image`, `describe_image`,
 
 - only allows `http(s)` URLs (no `file://`, no other schemes),
 - resolves the hostname and rejects it unless **every** resolved IP is a routable
-  public address — loopback, link-local (including the `169.254.169.254` cloud
+  public address: loopback, link-local (including the `169.254.169.254` cloud
   metadata address), and RFC-1918/ULA private ranges are all blocked,
 - disables redirects, so a public host can't 302 you into a private one,
 - enforces a hard size cap (`FETCH_MAX_BYTES`, default 100 MB).

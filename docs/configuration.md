@@ -1,6 +1,6 @@
 # Configuration
 
-Copy [`template.env`](../template.env) to `.env` and fill in real values — never commit
+Copy [`template.env`](../template.env) to `.env` and fill in real values. Never commit
 `.env`. `compose.yml` picks it up via `env_file: .env`.
 
 ```bash
@@ -11,12 +11,12 @@ cp template.env .env
 
 | Variable | Required | Default | Description |
 | --- | --- | --- | --- |
-| `OIDC_CONFIG_URL` | yes | — | Your OIDC provider's discovery document URL (e.g. Pocket ID's `.well-known/openid-configuration`). |
-| `OIDC_CLIENT_ID` | yes | — | OIDC client id, from the client you create in your provider. |
-| `OIDC_CLIENT_SECRET` | yes | — | OIDC client secret. |
-| `BASE_URL` | yes | — | Public HTTPS URL of this server, as seen by Claude (no trailing slash). Used to build callback, download, and upload URLs. Must sit behind a reverse proxy / tunnel that terminates TLS. |
-| `ALLOWED_EMAILS` | yes | — | Comma-separated allowlist. Only these emails (matched via the OIDC provider's userinfo) may call any tool. Case-insensitive. |
-| `OPENROUTER_API_KEY` | yes | — | From [openrouter.ai/keys](https://openrouter.ai/keys). OpenRouter credits are billed in USD. |
+| `OIDC_CONFIG_URL` | yes | n/a | Your OIDC provider's discovery document URL (e.g. Pocket ID's `.well-known/openid-configuration`). |
+| `OIDC_CLIENT_ID` | yes | n/a | OIDC client id, from the client you create in your provider. |
+| `OIDC_CLIENT_SECRET` | yes | n/a | OIDC client secret. |
+| `BASE_URL` | yes | n/a | Public HTTPS URL of this server, as seen by Claude (no trailing slash). Used to build callback, download, and upload URLs. Must sit behind a reverse proxy / tunnel that terminates TLS. |
+| `ALLOWED_EMAILS` | yes | n/a | Comma-separated allowlist. Only these emails (matched via the OIDC provider's userinfo) may call any tool. Case-insensitive. |
+| `OPENROUTER_API_KEY` | yes | n/a | From [openrouter.ai/keys](https://openrouter.ai/keys). OpenRouter credits are billed in USD. |
 | `PORT` | no | `8000` | Port the server listens on. |
 | `FILES_DIR` | no | `./generated` | Where generated/uploaded files are stored. The Docker image sets this to `/data/generated`. |
 | `FILES_TOKEN` | no | random per run | Secret that gates the `/files/<id>` download route (`?token=...`). Set a **stable** value so download links survive restarts; if unset, a random one is generated and printed to the logs each run. Generate one with `python -c "import secrets; print(secrets.token_urlsafe(24))"`. |
