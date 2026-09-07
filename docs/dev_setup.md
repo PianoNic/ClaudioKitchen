@@ -60,7 +60,7 @@ out during collection.
 ## Adding a tool
 
 1. Add the `@mcp.tool` function to the right module under `src/tools/` (or a new
-   module, if it's a new domain) — see any existing tool for the pattern: `await
+   module, if it's a new domain). See any existing tool for the pattern: `await
    _check_user()`, then `await _check_budget()` for anything that spends credits.
 2. If it's a new module, add it to the import list in `src/tools/__init__.py`.
 3. Update the tools table in the [usage guide](usage-guide.md).
