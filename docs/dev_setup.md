@@ -7,7 +7,8 @@ main.py              entrypoint: wires up src/app.py's mcp instance and runs it
 src/
   app.py              the FastMCP instance + the client-facing SERVER_INSTRUCTIONS
   config.py           all env-var reads / constants (loaded once, at import time)
-  auth.py             OIDCProxy wiring + the per-call email allowlist check
+  auth.py             OIDCProxy wiring + optional required-claim check
+  auth_claim.py       whether a claims dict grants access for one claim name
   files.py            save/sniff/decode helpers, the SSRF-guarded fetcher, upload tickets
   usage.py            the cost ledger (usage.jsonl) and the monthly budget cap
   image_view.py       the MCP Apps view that renders images inline in the chat app

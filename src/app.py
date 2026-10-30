@@ -9,8 +9,8 @@ from fastmcp import FastMCP
 
 from src.auth import auth
 
-# Sent to the client on initialize (MCP `instructions`). Clients like Host may fold
-# this into the system prompt, so it's where we tell Host it CAN generate media here.
+# Sent to the client on initialize (MCP `instructions`). Clients may fold
+# this into the system prompt, so it's where we tell the client it CAN generate media here.
 SERVER_INSTRUCTIONS = """\
 ClaudioKitchen gives you real multimodal generation through OpenRouter. You are NOT
 limited to text on this connection: when the user asks you to create / generate / draw

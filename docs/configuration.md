@@ -14,8 +14,10 @@ cp template.env .env
 | `OIDC_CONFIG_URL` | yes | n/a | Your OIDC provider's discovery document URL (e.g. Pocket ID's `.well-known/openid-configuration`). |
 | `OIDC_CLIENT_ID` | yes | n/a | OIDC client id, from the client you create in your provider. |
 | `OIDC_CLIENT_SECRET` | yes | n/a | OIDC client secret. |
-| `BASE_URL` | yes | n/a | Public HTTPS URL of this server, as seen by Host (no trailing slash). Used to build callback, download, and upload URLs. Must sit behind a reverse proxy / tunnel that terminates TLS. |
-| `ALLOWED_EMAILS` | yes | n/a | Comma-separated allowlist. Only these emails (matched via the OIDC provider's userinfo) may call any tool. Case-insensitive. |
+| `BASE_URL` | yes | n/a | Public HTTPS URL of this server, as seen by the client (no trailing slash). Used to build callback, download, and upload URLs. Must sit behind a reverse proxy / tunnel that terminates TLS. |
+| `OIDC_SCOPES` | no | `openid profile` | Space-separated scopes requested from the IdP. `profile` is what Pocket ID uses to emit custom claims. |
+| `REQUIRED_CLAIM` | no | unset | When set, this claim must be present and truthy on the id token or userinfo document. When unset, anyone who can complete the OIDC login may call tools. | 
+| `OIDC_FORWARD_RESOURCE` | no | `false` | Forward the client's MCP resource URL to the IdP. Leave false. Pocket ID rejects that URL unless it is a registered API, and the login fails with `invalid_request`. |
 | `OPENROUTER_API_KEY` | yes | n/a | From [openrouter.ai/keys](https://openrouter.ai/keys). OpenRouter credits are billed in USD. |
 | `PORT` | no | `8000` | Port the server listens on. |
 | `FILES_DIR` | no | `./generated` | Where generated/uploaded files are stored. The Docker image sets this to `/data/generated`. |
@@ -77,17 +79,18 @@ docker compose -f compose.dev.yml up --build
 
 ## Setting up the OIDC provider (Pocket ID example)
 
-Host's remote MCP connectors require OAuth with **Dynamic Client Registration
+Remote MCP connectors require OAuth with **Dynamic Client Registration
 (DCR)**, which Pocket ID (like most OIDC providers) doesn't support. FastMCP's
-`OIDCProxy` bridges the gap: Host registers dynamically against this MCP server, and
+`OIDCProxy` bridges the gap: the client registers dynamically against this MCP server, and
 the server proxies the real login to your OIDC provider.
 
 1. In Pocket ID, create a new OIDC client.
 2. Set its callback URL to `https://<your-mcp-domain>/auth/callback`.
 3. Copy the client id and secret into `OIDC_CLIENT_ID` / `OIDC_CLIENT_SECRET`.
 4. In the chat app: **Settings → Connectors → Add custom connector**, URL:
-   `https://<your-mcp-domain>/mcp`. Host redirects to Pocket ID; once you log in,
-   `ALLOWED_EMAILS` is enforced on every tool call.
+   `https://<your-mcp-domain>/mcp`. The client redirects to your IdP. Anyone who can
+   complete that login may call tools. To also require a claim, set
+   `REQUIRED_CLAIM` to the claim name your provider puts on the user.
 
 For local testing without HTTPS, tunnel with `cloudflared` or `ngrok` and set that URL
 as `BASE_URL`.

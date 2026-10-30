@@ -2,7 +2,7 @@
   <strong>🍳 ClaudioKitchen</strong>
 </p>
 <p align="center">
-  Remote MCP server that gives Host real multimodal generation: image, video, TTS, transcription, embeddings, and rerank, via OpenRouter.
+  Remote MCP server that gives an MCP client real multimodal generation: image, video, TTS, transcription, embeddings, and rerank, via OpenRouter.
 </p>
 <p align="center">
   <a href="https://github.com/PianoNic/ClaudioKitchen"><img src="https://badgetrack.pianonic.ch/badge?tag=claudiokitchen&label=visits&color=fb923c&style=flat" alt="visits"/></a>
@@ -16,13 +16,13 @@
 ## What is ClaudioKitchen?
 
 It's a Streamable HTTP MCP server that adds OIDC auth (Pocket ID, or any OIDC
-provider) with an email allowlist, then exposes OpenRouter's generation APIs as tools:
+provider), then exposes OpenRouter's generation APIs as tools:
 generate/edit/describe images, generate video, text-to-speech, transcription,
 embeddings, rerank, plus file management and per-request cost tracking.
 
-Host's remote MCP connectors require OAuth with **Dynamic Client Registration
+Remote MCP connectors require OAuth with **Dynamic Client Registration
 (DCR)**, which most OIDC providers (including Pocket ID) don't support. FastMCP's
-`OIDCProxy` bridges the gap: Host registers dynamically against this server, and the
+`OIDCProxy` bridges the gap: the client registers dynamically against this server, and the
 server proxies the real login to your OIDC provider.
 
 ## Setup
@@ -33,7 +33,7 @@ server proxies the real login to your OIDC provider.
 2. `docker compose up -d` (pulls the published image), or
    `docker compose -f compose.dev.yml up --build` to build from source.
 3. In the chat app: **Settings → Connectors → Add custom connector**, URL:
-   `https://<your-mcp-domain>/mcp`. Host redirects you to your OIDC provider, you log
+   `https://<your-mcp-domain>/mcp`. The client redirects you to your OIDC provider, you log
    in, and you're done.
 
 ## Tools
@@ -54,7 +54,7 @@ Full behavior, model overrides, and the two video run modes are in the
 
 ## Security
 
-OIDC auth + email allowlist on every call, a token-gated download route, an SSRF guard
+OIDC auth on every call, a token-gated download route, an SSRF guard
 on every outbound fetch, and `nosniff`/attachment headers on stored files. Details and
 known limitations: [docs/security.md](docs/security.md).
 

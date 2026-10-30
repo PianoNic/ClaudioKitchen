@@ -36,7 +36,7 @@ retries image-only. That includes Recraft's **vector** models (e.g.
 [MCP Apps](https://blog.modelcontextprotocol.io/posts/2026-01-26-mcp-apps/) UI resource
 (`ui://claudiokitchen/image.html`, see `src/image_view.py`). On hosts that support MCP
 Apps (the chat app), the result renders **inline in the chat** instead of only as a
-download link. This works around a the chat app limitation where a tool's image content
+download link. This works around a chat-app limitation where a tool's image content
 is otherwise shown only inside the collapsed tool call. Hosts without MCP Apps support
 ignore it and fall back to the image block plus the download link, so nothing is lost.
 
@@ -51,7 +51,7 @@ ignore it and fall back to the image block plus the download link, so nothing is
 
 > Note: a remote MCP server can only return data as the result of an active tool call,
 > or as progress notifications during one. It **cannot** push an unsolicited message
-> into a Host chat after the turn ends. Use `wait=True` to have Host report the
+> into the chat after the turn ends. Use `wait=True` to have the client report the
 > finished video automatically.
 
 Generated images, audio, and video are saved to `FILES_DIR` and served at
@@ -64,12 +64,12 @@ Any file type works. The extension comes from the filename you provide, or is sn
 from the bytes and content-type (falling back to `.bin`). Downloads are always served
 as attachments with `nosniff`. There are three ways to upload.
 
-**A) Host with a sandbox (recommended, no base64):** Host calls `create_upload_url`
+**A) Sandboxed client (recommended, no base64):** the client calls `create_upload_url`
 to mint a short-lived ticket, then PUTs the raw file bytes directly:
 ```
 curl -T /path/to/report.pdf "<upload_url>&name=report.pdf"
 ```
-The PUT returns `{"url": "https://.../files/<id>.pdf?token=..."}`. Host passes that
+The PUT returns `{"url": "https://.../files/<id>.pdf?token=..."}`. The client passes that
 `url` to the user, or to `edit_image` / `describe_image` / `transcribe_audio` /
 `generate_video`. Add `&name=<filename>` to keep the right extension. Tickets are
 time-limited (`expires_in`, default 900 s) and use-limited (`max_uses`, default 5).
@@ -78,7 +78,7 @@ time-limited (`expires_in`, default 900 s) and use-limited (`max_uses`, default 
 **`<BASE_URL>/upload?token=<FILES_TOKEN>`**, drag-drop any file, and copy the returned
 URL into chat.
 
-**C) `upload_file` tool:** for a file Host already has as base64, a `data:` URL, or
+**C) `upload_file` tool:** for a file the client already has as base64, a `data:` URL, or
 an http URL. Pass `filename` to preserve the extension. Base64 decoding is tolerant,
 and the type is auto-detected (images, PDF, MP4, WAV, MP3, OGG, FLAC, ZIP, and more).
 

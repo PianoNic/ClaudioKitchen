@@ -44,8 +44,8 @@ Inbound uploads are capped separately by `UPLOAD_MAX_BYTES`.
 
 ## Auth
 
-Every tool call runs `_check_user()` (`src/auth.py`) first, which resolves the caller's
-email from the OIDC access token (falling back to a userinfo lookup, cached per
-subject) and rejects anything not in `ALLOWED_EMAILS`. See
-[configuration.md](configuration.md#setting-up-the-oidc-provider-pocket-id-example)
+Every tool call runs `_check_user()` (`src/auth.py`) first. A completed OIDC login
+is enough. If `REQUIRED_CLAIM` is set, the named claim must be present and truthy
+on the id token (or, if it is missing there, on the provider's userinfo document).
+See [configuration.md](configuration.md#setting-up-the-oidc-provider-pocket-id-example)
 for how the OIDC proxy is wired up.

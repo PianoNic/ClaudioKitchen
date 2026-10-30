@@ -12,7 +12,30 @@ OIDC_CONFIG_URL = os.environ["OIDC_CONFIG_URL"]
 OIDC_CLIENT_ID = os.environ["OIDC_CLIENT_ID"]
 OIDC_CLIENT_SECRET = os.environ["OIDC_CLIENT_SECRET"]
 BASE_URL = os.environ["BASE_URL"]
-ALLOWED_EMAILS = {e.strip().lower() for e in os.environ["ALLOWED_EMAILS"].split(",")}
+
+# Optional extra gate. When set, the named claim must be present and truthy on
+# the id token or userinfo document. When unset, anyone who can complete the
+# OIDC login may call tools (the provider's own user/group rules still apply).
+REQUIRED_CLAIM = (os.environ.get("REQUIRED_CLAIM") or "").strip()
+
+# Scopes requested from the IdP. `openid` yields an id token; `profile` is what
+# Pocket ID uses to emit custom claims. Override if a provider releases
+# REQUIRED_CLAIM under a different scope.
+OIDC_SCOPES = " ".join((os.environ.get("OIDC_SCOPES") or "openid profile").split()) or "openid profile"
+
+
+def _env_flag(name: str, default: bool) -> bool:
+    raw = os.environ.get(name)
+    if raw is None or not raw.strip():
+        return default
+    return raw.strip().lower() in {"1", "true", "yes", "on"}
+
+
+# The client's authorize request includes resource=<this server>/mcp (RFC 8707).
+# Pocket ID, and most other IdPs, reject that URL unless it is a registered API.
+# Leave this off so the IdP sees a normal login. Turn it on only after the
+# provider is configured to accept this server's resource URL.
+OIDC_FORWARD_RESOURCE = _env_flag("OIDC_FORWARD_RESOURCE", False)
 
 # Origin of this server (scheme + host), so a sandboxed MCP Apps view may load a
 # resource (e.g. an SVG) from a /files download URL under BASE_URL.
